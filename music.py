@@ -1,4 +1,5 @@
 # Created by Patrick Kao
+import subprocess
 from time import sleep
 
 import numpy as np
@@ -6,14 +7,20 @@ import pandas as pd
 import pygame
 import pygame.mixer
 from midiutil import MIDIFile
-from midi2audio import FluidSynth
-import subprocess
+from scipy import signal
 
 FILE_PATH = "~/Desktop/test.midi"
 SONG_LEN = 10
 pitches = None
 TOTAL_RANGE = 35
-INSTRUMENTS = [0, 42, 72, 57, 74]
+INSTRUMENTS = [0, 42, 72]
+BPM = 60
+MAX_LEN = int(SONG_LEN * BPM / 60 * 2)  # 2 for eighth notes
+volume_tracks = {
+    0: 2,
+    1: 3
+}
+
 
 def get_pitch(input):
     """
@@ -44,46 +51,75 @@ def process_midi(midi_file, play=False, output_wav=None):
             sleep(1)
     if output_wav is not None:
         out_type = "wav"
-        sf2 = "piano.sf2"
+        sf2 = "orchestra.sf2"
         subprocess.call(['fluidsynth', '-T', out_type, '-F', output_wav, '-ni', sf2, midi_file])
     print("Done!")
 
 
-def write_midi(input, output_file):
-    bpm = 60
+def z_score(input_list, element):
+    min_el = min(input_list)
+    max_el = max(input_list)
+    return (element - min_el) / (max_el - min_el)
 
+
+def write_midi(input_data, output_file):
     midi = MIDIFile(1)
     midi.addTrackName(track=0, time=0, trackName="Sample Track")
-    midi.addTempo(track=0, time=0, tempo=bpm)
-    midi.addProgramChange(0, 0, 0, program=42)
-    for track in range(input.shape[1]):
-        track_data = input[:, track]
-        track_data = track_data[~np.isnan(track_data)]
-        min_note = min(track_data)
-        max_note = max(track_data)
+    midi.addTempo(track=0, time=0, tempo=BPM)
+
+    for track in range(input_data.shape[1]):
+        if track in volume_tracks.values():
+            break
+        midi.addProgramChange(0, track, 0, program=INSTRUMENTS[track])
+        track_data = input_data[:, track]
         time_per_note = SONG_LEN / len(track_data)
         for i, note in enumerate(track_data):
-            z_score = (note - min_note) / (max_note - min_note)
+            z = z_score(track_data, note)
+            volume = 100
+            if track in volume_tracks:
+                volume_track = input_data[:, volume_tracks[track]]
+                index = int(i * len(volume_track) / len(track_data))
+                volume_z = z_score(volume_track, volume_track[index])
+                volume = int(volume_z * 100) + 1
+
+            assert 127 > volume >= 0
             midi.addNote(track=0,
                          channel=track,
-                         pitch=get_pitch(z_score * TOTAL_RANGE),
+                         pitch=get_pitch(z * TOTAL_RANGE),
                          time=time_per_note * i,
                          duration=time_per_note,
-                         volume=100)
+                         volume=volume)
 
     with open(output_file, 'wb') as binfile:
         midi.writeFile(binfile)
 
 
+def moving_average(a, n=3):
+    ret = np.cumsum(a, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
+
 def parse_input(input_file):
     pandas_file = pd.read_csv(input_file)
     data = np.asarray(pandas_file)
-    # TODO: normalize data
-    return data
+    proc_data = []
+    # moving average
+    for track in range(data.shape[1]):
+        track_data = data[:, track]
+        track_data = track_data[~np.isnan(track_data)]
+        if len(track_data) > MAX_LEN:
+            print("Track too long. Resampling")
+            track_data = moving_average(track_data)
+            track_data = signal.resample(track_data, MAX_LEN)
+
+        proc_data.append(track_data)
+
+    return proc_data
 
 
 if __name__ == "__main__":
     output_file = "output.mid"
-    input = parse_input("scales.csv")
-    write_midi(input, output_file)
+    input_data = parse_input("scales.csv")
+    write_midi(input_data, output_file)
     process_midi(output_file, play=False, output_wav="output.wav")
