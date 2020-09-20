@@ -10,8 +10,7 @@ from midiutil import MIDIFile
 from scipy import signal
 
 FILE_PATH = "~/Desktop/test.midi"
-SONG_LEN = 10
-pitches = None
+SONG_LEN = 30
 TOTAL_RANGE = 35
 INSTRUMENTS = [0, 42, 72]
 BPM = 60
@@ -51,7 +50,7 @@ def process_midi(midi_file, play=False, output_wav=None):
             sleep(1)
     if output_wav is not None:
         out_type = "wav"
-        sf2 = "Hack2020/piano.sf2"
+        sf2 = "Hack2020/orchestra.sf2"
         subprocess.call(['fluidsynth', '-T', out_type, '-F', output_wav, '-ni', sf2, midi_file])
     print("Done!")
 
@@ -109,7 +108,7 @@ def parse_input(input_file):
         track_data = data[:, track]
         track_data = track_data[~np.isnan(track_data)]
         if len(track_data) > MAX_LEN:
-            print("Track too long. Resampling")
+            print(f"Track too long. Resampling from {len(track_data)} to {MAX_LEN} samples")
             track_data = moving_average(track_data)
             track_data = signal.resample(track_data, MAX_LEN)
 
