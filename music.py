@@ -10,9 +10,9 @@ from midiutil import MIDIFile
 from scipy import signal
 
 FILE_PATH = "~/Desktop/test.midi"
-SONG_LEN = 15
+SONG_LEN = 20
 TOTAL_RANGE = 35
-INSTRUMENTS = [0, 42, 72]
+INSTRUMENTS = [0, 42, 72, 0, 42, 0, 42]
 BPM = 120
 MAX_LEN = int(SONG_LEN * BPM / 60 * 2)  # 2 for eighth notes
 
@@ -128,6 +128,6 @@ def parse_input(input_file):
 
 if __name__ == "__main__":
     output_file = "output.mid"
-    input_data = parse_input("scales.csv")
-    write_midi(input_data, output_file, mode="both")
+    input_data = parse_input("nasdaq.csv")
+    write_midi(input_data, output_file, mode="pitch")
     process_midi(output_file, play=True, output_wav="output.wav")
