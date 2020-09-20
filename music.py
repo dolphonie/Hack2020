@@ -10,16 +10,11 @@ from midiutil import MIDIFile
 from scipy import signal
 
 FILE_PATH = "~/Desktop/test.midi"
-SONG_LEN = 30
+SONG_LEN = 15
 TOTAL_RANGE = 35
 INSTRUMENTS = [0, 42, 72]
-BPM = 60
+BPM = 120
 MAX_LEN = int(SONG_LEN * BPM / 60 * 2)  # 2 for eighth notes
-volume_tracks = {
-    0: 2,
-    1: 3
-}
-
 
 def get_pitch(input):
     """
@@ -32,7 +27,7 @@ def get_pitch(input):
         last = len(pitches) - 1
         pitches.append(pitches[last] + 2)
         pitches.append(pitches[last] + 4)
-        pitches.append(pitches[last] + 6)
+        pitches.append(pitches[last] + 5)
         pitches.append(pitches[last] + 7)
         pitches.append(pitches[last] + 9)
         pitches.append(pitches[last] + 11)
@@ -55,39 +50,53 @@ def process_midi(midi_file, play=False, output_wav=None):
     print("Done!")
 
 
-def z_score(input_list, element):
+def percentile(input_list, element):
     min_el = min(input_list)
     max_el = max(input_list)
     return (element - min_el) / (max_el - min_el)
 
 
-def write_midi(input_data, output_file):
+def write_midi(input_data, output_file, mode="pitch"):
     midi = MIDIFile(1)
     midi.addTrackName(track=0, time=0, trackName="Sample Track")
     midi.addTempo(track=0, time=0, tempo=BPM)
 
     for track in range(len(input_data)):
-        if track in volume_tracks.values():
+        if mode == "both" and track >= len(input_data) // 2:
             break
+
         midi.addProgramChange(0, track, 0, program=INSTRUMENTS[track])
         track_data = input_data[track]
         time_per_note = SONG_LEN / len(track_data)
         for i, note in enumerate(track_data):
-            z = z_score(track_data, note)
-            volume = 100
-            if track in volume_tracks:
-                volume_track = input_data[volume_tracks[track]]
-                index = int(i * len(volume_track) / len(track_data))
-                volume_z = z_score(volume_track, volume_track[index])
-                volume = int(volume_z * 100) + 1
+            z = percentile(track_data, note)
 
-            assert 127 > volume >= 0
-            midi.addNote(track=0,
-                         channel=track,
-                         pitch=get_pitch(z * TOTAL_RANGE),
-                         time=time_per_note * i,
-                         duration=time_per_note,
-                         volume=volume)
+            if mode == "both":
+                volume_track = input_data[track + len(input_data) // 2]
+                index = int(i * len(volume_track) / len(track_data))
+                volume_z = percentile(volume_track, volume_track[index])
+                volume = int(volume_z * 100) + 1
+                assert 127 > volume >= 0
+                midi.addNote(track=0,
+                             channel=track,
+                             pitch=get_pitch(z * TOTAL_RANGE),
+                             time=time_per_note * i,
+                             duration=time_per_note,
+                             volume=volume)
+            elif mode == "pitch":
+                midi.addNote(track=0,
+                             channel=track,
+                             pitch=get_pitch(z * TOTAL_RANGE),
+                             time=time_per_note * i,
+                             duration=time_per_note,
+                             volume=100)
+            elif mode == "volume":
+                midi.addNote(track=0,
+                             channel=track,
+                             pitch=60 + 12 * track,
+                             time=time_per_note * i,
+                             duration=time_per_note,
+                             volume=int(z * 100))
 
     with open(output_file, 'wb') as binfile:
         midi.writeFile(binfile)
@@ -120,5 +129,5 @@ def parse_input(input_file):
 if __name__ == "__main__":
     output_file = "output.mid"
     input_data = parse_input("scales.csv")
-    write_midi(input_data, output_file)
-    process_midi(output_file, play=False, output_wav="output.wav")
+    write_midi(input_data, output_file, mode="both")
+    process_midi(output_file, play=True, output_wav="output.wav")
