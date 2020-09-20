@@ -51,7 +51,7 @@ def process_midi(midi_file, play=False, output_wav=None):
             sleep(1)
     if output_wav is not None:
         out_type = "wav"
-        sf2 = "orchestra.sf2"
+        sf2 = "Hack2020/piano.sf2"
         subprocess.call(['fluidsynth', '-T', out_type, '-F', output_wav, '-ni', sf2, midi_file])
     print("Done!")
 
@@ -67,17 +67,17 @@ def write_midi(input_data, output_file):
     midi.addTrackName(track=0, time=0, trackName="Sample Track")
     midi.addTempo(track=0, time=0, tempo=BPM)
 
-    for track in range(input_data.shape[1]):
+    for track in range(len(input_data)):
         if track in volume_tracks.values():
             break
         midi.addProgramChange(0, track, 0, program=INSTRUMENTS[track])
-        track_data = input_data[:, track]
+        track_data = input_data[track]
         time_per_note = SONG_LEN / len(track_data)
         for i, note in enumerate(track_data):
             z = z_score(track_data, note)
             volume = 100
             if track in volume_tracks:
-                volume_track = input_data[:, volume_tracks[track]]
+                volume_track = input_data[volume_tracks[track]]
                 index = int(i * len(volume_track) / len(track_data))
                 volume_z = z_score(volume_track, volume_track[index])
                 volume = int(volume_z * 100) + 1
